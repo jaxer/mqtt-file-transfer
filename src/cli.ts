@@ -5,10 +5,10 @@ import { inspect } from "util";
 import * as mqtt from "mqtt";
 import { MqttClient } from "mqtt";
 import { readFileSync } from "fs";
-import { MqttFileSender } from "@app/mqtt-file-transfer/mqtt-file.sender";
-import { MqttFileReceiver } from "@app/mqtt-file-transfer/mqtt-file.receiver";
+import { MqttFileSender } from "./mqtt-file.sender";
+import { MqttFileReceiver } from "./mqtt-file.receiver";
 import { randomBytes } from "node:crypto";
-import { MqttjsFacade } from "@app/mqtt-file-transfer/mqttjs.facade";
+import { MqttjsFacade } from "./mqttjs.facade";
 import { IClientOptions } from "mqtt/src/lib/client";
 
 interface MqttOptions {

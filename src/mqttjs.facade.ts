@@ -1,4 +1,4 @@
-import { MqttClientFacade } from "@app/mqtt-file-transfer/mqtt-client.facade";
+import { MqttClientFacade } from "./mqtt-client.facade";
 import { MqttClient } from "mqtt";
 
 export class MqttjsFacade extends MqttClientFacade {
