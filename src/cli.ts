@@ -213,7 +213,7 @@ class FileSenderModule {}
 
 async function bootstrap() {
     const logger = new ConsoleLogger();
-    logger.setLogLevels(['log', 'warn', 'error', 'fatal', 'debug']);
+    logger.setLogLevels(['log', 'verbose', 'warn', 'error', 'fatal', 'debug']);
 
     await CommandFactory.run(FileSenderModule, {
         logger,

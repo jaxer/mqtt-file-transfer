@@ -21,7 +21,13 @@
     "bin": {
         "mqtt-file-transfer": "dist/src/cli.js"
     },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
     "dependencies": {
+        "async": "^3.2.6",
         "class-transformer": "^0.5.1",
         "class-validator": "^0.14.1",
         "mqtt": "^5.10.4"

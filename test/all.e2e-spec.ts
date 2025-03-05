@@ -1,7 +1,5 @@
 import * as mqtt from 'mqtt';
-import { MqttFileReceiver } from '../src/mqtt-file.receiver';
-import { MqttFileSender } from '../src/mqtt-file.sender';
-import { MqttjsFacade } from '../src/mqttjs.facade';
+import { MqttFileReceiver, MqttFileSender, MqttjsFacade } from '../src';
 
 jest.setTimeout(30000); // 30 seconds
 
