@@ -10,8 +10,8 @@ describe('with real MQTT Broker', () => {
     let senderClient: mqtt.MqttClient;
 
     beforeEach(async () => {
-        receiverClient = await mqtt.connectAsync('mqtt://localhost:1883');
-        senderClient = await mqtt.connectAsync('mqtt://localhost:1883');
+        receiverClient = await mqtt.connectAsync('mqtt://127.0.0.1:1883');
+        senderClient = await mqtt.connectAsync('mqtt://127.0.0.1:1883');
     });
 
     describe('with MqttFileReceiver subscribed', () => {
@@ -44,7 +44,12 @@ describe('with real MQTT Broker', () => {
     });
 
     afterEach(async () => {
-        receiverClient.end();
-        senderClient.end();
+        if (receiverClient) {
+            await receiverClient.endAsync();
+        }
+
+        if (senderClient) {
+            await senderClient.endAsync();
+        }
     });
 });
