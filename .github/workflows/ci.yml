@@ -21,15 +21,6 @@ jobs:
           - 1883:1883
 
     steps:
-      #      - name: Wait for Mosquitto to be ready
-      #        run: |
-      #          for i in {1..30}; do
-      #            nc -z localhost 1883 && echo "Mosquitto is up" && exit 0
-      #            echo "Waiting for Mosquitto..."
-      #            sleep 1
-      #          done
-      #          echo "Mosquitto did not start in time" && exit 1
-
       - name: Checkout code
         uses: actions/checkout@v3
 
