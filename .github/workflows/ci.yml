@@ -16,7 +16,7 @@ jobs:
       mqtt:
         image: eclipse-mosquitto:latest
         volumes:
-          - ./docker/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+          - ./docker/mosquitto/config:/mosquitto/config
         ports:
           - 1883:1883
 
