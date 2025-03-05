@@ -12,20 +12,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      mqtt:
-        image: eclipse-mosquitto:latest
-        volumes:
-          - ./docker/mosquitto/config:/mosquitto/config
-        ports:
-          - 1883:1883
-        options: >-
-          --health-cmd "mosquitto_sub -h localhost -t test -C 1"
-          --health-interval 10s 
-          --health-timeout 5s 
-          --health-retries 3
-
     steps:
+      - name: Set up Mosquitto MQTT broker
+        run: docker-compose -f docker/docker-compose.yaml up -d
+
       - name: Checkout code
         uses: actions/checkout@v3
 
