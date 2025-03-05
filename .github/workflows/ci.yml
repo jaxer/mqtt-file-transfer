@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Install Docker Compose
+        run: sudo apt-get update && sudo apt-get install -y docker-compose
+
       - name: Set up Mosquitto MQTT broker
         run: docker-compose -f docker/docker-compose.yaml up -d
 
