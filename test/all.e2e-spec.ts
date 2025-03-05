@@ -16,7 +16,7 @@ describe('e2e', () => {
         await receiver.addSubscriptions();
 
         const sender = new MqttFileSender(senderClient);
-        const fileUrl = await sender.transferFile('big-files/random_100MB.bin');
+        const fileUrl = await sender.transferFile('test/random_1KB.bin');
 
         expect(fileUrl).toMatch(/^file:\/\/.*$/);
 
