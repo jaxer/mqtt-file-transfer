@@ -4,6 +4,10 @@
     "description": "An MQTT-based file transfer library for sending and receiving large files efficiently.",
     "author": "Aleksandr Smirnov",
     "license": "MIT",
+    "funding": {
+        "type": "individual",
+        "url": "https://github.com/sponsors/jaxer"
+    },
     "scripts": {
         "send": "ts-node src/cli.ts send -p 1883 --protocol mqtt big-files/random_2GB.bin",
         "receive": "ts-node src/cli.ts receive -p 1883 --protocol mqtt received-files/",
