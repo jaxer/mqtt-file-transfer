@@ -3,6 +3,8 @@ import { MqttFileReceiver } from '../src/mqtt-file.receiver';
 import { MqttFileSender } from '../src/mqtt-file.sender';
 import { MqttjsFacade } from '../src/mqttjs.facade';
 
+jest.setTimeout(30000); // 30 seconds
+
 describe('e2e', () => {
     it('should use real MQTT Broker', async () => {
         const receiverClient = mqtt.connect('mqtt://localhost:1883');
@@ -20,7 +22,7 @@ describe('e2e', () => {
 
         expect(fileUrl).toMatch(/^file:\/\/.*$/);
 
-        receiverClient.end();
         senderClient.end();
+        receiverClient.end();
     });
 });
