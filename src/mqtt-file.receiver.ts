@@ -1,9 +1,17 @@
-import { FileHandle, open, statfs, unlink } from "node:fs/promises";
-import { inspect } from "node:util";
-import { createHash } from "node:crypto";
-import { pathToFileURL } from "node:url";
-import { join } from "node:path";
-import { ChunkBitmap } from "./chunk.bitmap";
+import { Logger } from '@nestjs/common';
+import * as async from 'async';
+import {
+    ClassConstructor,
+    instanceToPlain,
+    plainToInstance,
+} from 'class-transformer';
+import { validateOrReject } from 'class-validator';
+import { createHash } from 'node:crypto';
+import { FileHandle, open, statfs, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { inspect } from 'node:util';
+import { ChunkBitmap } from './chunk.bitmap';
 import {
     AddFileDto,
     AddFileResponseDto,
@@ -12,13 +20,9 @@ import {
     FileTransferAckDto,
     FileTransferEofDto,
     FileTransferProgressDto,
-} from "./file-transfer.dto";
-import { Logger } from "@nestjs/common";
-import { FileTransferTopics, StreamTopicType } from "./file-transfer.topics";
-import { ClassConstructor, instanceToPlain, plainToInstance } from "class-transformer";
-import { validateOrReject } from "class-validator";
-import * as async from "async";
-import { MqttClientFacade } from "./mqtt-client.facade";
+} from './file-transfer.dto';
+import { FileTransferTopics, StreamTopicType } from './file-transfer.topics';
+import { MqttClientFacade } from './mqtt-client.facade';
 
 const maxAllowedFileSizeInMb = 10 * 1024; // 10 GB
 const chunkSizeInBytes = 64 * 1024; // 64 KB
@@ -35,18 +39,24 @@ class ChunkStream {
     public receivedBytes = 0;
 
     constructor(public readonly addFileDto: AddFileDto) {
-        this.bitmap = new ChunkBitmap(this.addFileDto.fileSize, chunkSizeInBytes);
+        this.bitmap = new ChunkBitmap(
+            this.addFileDto.fileSize,
+            chunkSizeInBytes,
+        );
     }
 
     public isTimeToPublishProgress(now: number): boolean {
-        return now - (this.lastProgressAt ?? 0) > publishProgressEverySeconds * 1000;
+        return (
+            now - (this.lastProgressAt ?? 0) >
+            publishProgressEverySeconds * 1000
+        );
     }
 }
 
 class FileTransferError extends Error {
     constructor(message: string) {
         super(message);
-        this.name = "FileTransferError";
+        this.name = 'FileTransferError';
     }
 }
 
@@ -66,7 +76,7 @@ export class MqttFileReceiver {
         private readonly _workPath: string,
         private readonly _mqttClient: MqttClientFacade,
         private readonly _currentTimestampProvider: () => number,
-        private readonly _randomStringProvider: (length: number) => string
+        private readonly _randomStringProvider: (length: number) => string,
     ) {}
 
     public async destroy(): Promise<void> {
@@ -78,30 +88,35 @@ export class MqttFileReceiver {
         }
 
         if (this._queue.idle()) {
-            this._logger.log("Queue is empty, proceeding with shutdown.");
+            this._logger.log('Queue is empty, proceeding with shutdown.');
         } else {
-            this._logger.log("Waiting for queue to drain...");
+            this._logger.log('Waiting for queue to drain...');
             while (!this._queue.idle()) {
                 await this._queue.drain();
             }
-            this._logger.log("Queue drained, proceeding with shutdown.");
+            this._logger.log('Queue drained, proceeding with shutdown.');
         }
     }
 
-    public async cleanUpTransfers(cleanupTransfersOlderThanMinutes: number): Promise<void> {
+    public async cleanUpTransfers(
+        cleanupTransfersOlderThanMinutes: number,
+    ): Promise<void> {
         const now = this._currentTimestampProvider();
 
         for (const [streamId, chunkStream] of this._chunkStreams.entries()) {
-            if (now - chunkStream.createdAt > cleanupTransfersOlderThanMinutes * 60 * 1000) {
+            if (
+                now - chunkStream.createdAt >
+                cleanupTransfersOlderThanMinutes * 60 * 1000
+            ) {
                 try {
                     await this._closeChunkStream(chunkStream);
                     await this._publishTransferAborted(
                         chunkStream,
-                        `File transfer did not complete within ${cleanupTransfersOlderThanMinutes} minutes.`
+                        `File transfer did not complete within ${cleanupTransfersOlderThanMinutes} minutes.`,
                     );
                 } catch (error) {
                     this._logger.error(
-                        `Failed to abort file transfer ${streamId}: ${error.stack || error}`
+                        `Failed to abort file transfer ${streamId}: ${error.stack || error}`,
                     );
                 }
             }
@@ -114,10 +129,10 @@ export class MqttFileReceiver {
         const mqttSubscribeRequest = await this._mqttClient.subscribe(
             topicFilter,
             1,
-            this._wrapMessageProcessor(this._processAddFile.bind(this))
+            this._wrapMessageProcessor(this._processAddFile.bind(this)),
         );
         this._logger.log(
-            `MQTT Client subscribe call result: ${JSON.stringify(mqttSubscribeRequest)}`
+            `MQTT Client subscribe call result: ${JSON.stringify(mqttSubscribeRequest)}`,
         );
 
         this._mqttSubscriptions.push(topicFilter);
@@ -127,17 +142,20 @@ export class MqttFileReceiver {
         for (const [streamId, chunkStream] of this._chunkStreams.entries()) {
             try {
                 await this._closeChunkStream(chunkStream);
-                await this._publishTransferAborted(chunkStream, `Server shutting down`);
+                await this._publishTransferAborted(
+                    chunkStream,
+                    `Server shutting down`,
+                );
             } catch (error) {
                 this._logger.error(
-                    `Failed to abort file transfer ${streamId} on module destroy: ${error.stack || error}`
+                    `Failed to abort file transfer ${streamId} on module destroy: ${error.stack || error}`,
                 );
             }
         }
     }
 
     private _wrapMessageProcessor(
-        messageProcessor: (topic: string, message: unknown) => Promise<void>
+        messageProcessor: (topic: string, message: unknown) => Promise<void>,
     ) {
         const boundMessageProcessor = messageProcessor.bind(this);
         return (topic: string, message: unknown) => {
@@ -146,7 +164,7 @@ export class MqttFileReceiver {
                     return await boundMessageProcessor(topic, message);
                 } catch (error) {
                     this._logger.error(
-                        `Error processing message on ${topic}: ${error.stack || error}`
+                        `Error processing message on ${topic}: ${error.stack || error}`,
                     );
                 }
             });
@@ -155,9 +173,12 @@ export class MqttFileReceiver {
 
     private async _createAndValidateDto<T extends object>(
         message: ArrayBuffer,
-        cls: ClassConstructor<T>
+        cls: ClassConstructor<T>,
     ): Promise<T> {
-        const instance = plainToInstance(cls, JSON.parse(new TextDecoder().decode(message)));
+        const instance = plainToInstance(
+            cls,
+            JSON.parse(new TextDecoder().decode(message)),
+        );
         await validateOrReject(instance);
         return instance;
     }
@@ -168,7 +189,9 @@ export class MqttFileReceiver {
         // storage/stream/${streamId}/eof
         // storage/stream/${streamId}/chunk/${offset}/${checksum}
 
-        const [_, __, streamId, type, offsetAsString, checksum] = topic.split("/");
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const [_, __, streamId, type, offsetAsString, checksum] =
+            topic.split('/');
         const chunkStream = this._chunkStreams.get(streamId);
         if (!chunkStream) {
             return;
@@ -176,33 +199,47 @@ export class MqttFileReceiver {
 
         if (type === StreamTopicType.abort) {
             if (!chunkStream.abortedByReceiver) {
-                const dto = await this._createAndValidateDto(message, FileTransferAbortDto);
+                const dto = await this._createAndValidateDto(
+                    message,
+                    FileTransferAbortDto,
+                );
                 this._logger.verbose(`Received ${topic}: ${inspect(dto)}`);
                 await this._processAbortBySender(chunkStream, dto);
             }
         } else if (type === StreamTopicType.eof) {
-            const dto = await this._createAndValidateDto(message, FileTransferEofDto);
+            const dto = await this._createAndValidateDto(
+                message,
+                FileTransferEofDto,
+            );
             this._logger.verbose(`Received ${topic}: ${inspect(dto)}`);
             await this._processEof(chunkStream, dto);
         } else if (type === StreamTopicType.chunk) {
             const offset = parseInt(offsetAsString);
             if (isNaN(offset)) {
-                this._logger.warn(`Invalid offset ${offsetAsString} for stream ${streamId}.`);
+                this._logger.warn(
+                    `Invalid offset ${offsetAsString} for stream ${streamId}.`,
+                );
                 return;
             }
-            const calculatedChecksum = createHash("sha256")
+            const calculatedChecksum = createHash('sha256')
                 .update(Buffer.from(message))
-                .digest("hex");
-            this._logger.verbose(`Received ${topic}. Calculated checksum: ${calculatedChecksum}`);
+                .digest('hex');
+            this._logger.verbose(
+                `Received ${topic}. Calculated checksum: ${calculatedChecksum}`,
+            );
             if (calculatedChecksum !== checksum) {
                 this._logger.warn(
-                    `Checksum mismatch for stream ${streamId} at offset ${offset}. Expected: ${checksum}, Received: ${calculatedChecksum}. Skipping chunk`
+                    `Checksum mismatch for stream ${streamId} at offset ${offset}. Expected: ${checksum}, Received: ${calculatedChecksum}. Skipping chunk`,
                 );
             } else {
                 await this._processChunk(chunkStream, offset, message);
             }
 
-            if (chunkStream.isTimeToPublishProgress(this._currentTimestampProvider())) {
+            if (
+                chunkStream.isTimeToPublishProgress(
+                    this._currentTimestampProvider(),
+                )
+            ) {
                 await this._publishProgress(chunkStream);
             }
         }
@@ -215,26 +252,44 @@ export class MqttFileReceiver {
         progressDto.bytesReceived = chunkStream.receivedBytes;
 
         await this._validateAndPublishDto(
-            FileTransferTopics.getStreamTopic(chunkStream.streamId, StreamTopicType.progress),
-            progressDto
+            FileTransferTopics.getStreamTopic(
+                chunkStream.streamId,
+                StreamTopicType.progress,
+            ),
+            progressDto,
         );
     }
 
-    private async _processChunk(chunkStream: ChunkStream, offset: number, message: ArrayBuffer) {
+    private async _processChunk(
+        chunkStream: ChunkStream,
+        offset: number,
+        message: ArrayBuffer,
+    ) {
         const size = message.byteLength;
         chunkStream.receivedBytes += size;
         chunkStream.bitmap.trackChunk(offset);
-        await chunkStream.fileHandle.write(Buffer.from(message), 0, size, offset);
+        await chunkStream.fileHandle.write(
+            Buffer.from(message),
+            0,
+            size,
+            offset,
+        );
     }
 
-    private async _processAbortBySender(chunkStream: ChunkStream, abortDto: FileTransferAbortDto) {
+    private async _processAbortBySender(
+        chunkStream: ChunkStream,
+        abortDto: FileTransferAbortDto,
+    ) {
         this._logger.warn(
-            `Abort message received for stream ${chunkStream.streamId}. Reason: "${abortDto.reason}". Closing stream.`
+            `Abort message received for stream ${chunkStream.streamId}. Reason: "${abortDto.reason}". Closing stream.`,
         );
         await this._closeChunkStream(chunkStream);
     }
 
-    private async _processEof(chunkStream: ChunkStream, eofDto: FileTransferEofDto) {
+    private async _processEof(
+        chunkStream: ChunkStream,
+        eofDto: FileTransferEofDto,
+    ) {
         await chunkStream.fileHandle.sync();
 
         const checksum = await this._calculateChecksum(chunkStream);
@@ -247,8 +302,11 @@ export class MqttFileReceiver {
             const ackDto = new FileTransferAckDto();
             ackDto.fileUrl = pathToFileURL(chunkStream.tempFilePath).toString();
             await this._validateAndPublishDto(
-                FileTransferTopics.getStreamTopic(chunkStream.streamId, StreamTopicType.ack),
-                ackDto
+                FileTransferTopics.getStreamTopic(
+                    chunkStream.streamId,
+                    StreamTopicType.ack,
+                ),
+                ackDto,
             );
         } else {
             this._logger.warn(`Checksum NOK.`);
@@ -257,20 +315,20 @@ export class MqttFileReceiver {
                 await this._closeChunkStream(chunkStream, false);
                 await this._publishTransferAborted(
                     chunkStream,
-                    "All chunks received but checksum mismatch"
+                    'All chunks received but checksum mismatch',
                 );
             } else {
                 this._logger.warn(
-                    `Requesting retransfer for stream ${chunkStream.streamId}. Missing chunks count: ${chunkStream.bitmap.getMissingChunksCount()}`
+                    `Requesting retransfer for stream ${chunkStream.streamId}. Missing chunks count: ${chunkStream.bitmap.getMissingChunksCount()}`,
                 );
                 await this._mqttClient.publish(
                     FileTransferTopics.getStreamTopic(
                         chunkStream.streamId,
-                        StreamTopicType.retransfer
+                        StreamTopicType.retransfer,
                     ),
                     chunkStream.bitmap.getRetransferPayload(),
                     1,
-                    false
+                    false,
                 );
             }
         }
@@ -293,17 +351,19 @@ export class MqttFileReceiver {
 
             await this._validateAndPublishDto(
                 FileTransferTopics.getAddFileResponseTopic(),
-                response
+                response,
             );
         } catch (error) {
-            this._logger.error(`Error processing add file: ${error.stack || error}`);
+            this._logger.error(
+                `Error processing add file: ${error.stack || error}`,
+            );
 
             response.status = AddFileResponseStatus.ERROR;
             response.error = error.message || error;
 
             await this._validateAndPublishDto(
                 FileTransferTopics.getAddFileResponseTopic(),
-                response
+                response,
             );
         }
     }
@@ -312,12 +372,20 @@ export class MqttFileReceiver {
         await validateOrReject(dto);
 
         this._logger.verbose(`Publishing ${topic}: ${inspect(dto)}`);
-        await this._mqttClient.publish(topic, JSON.stringify(instanceToPlain(dto)), 1, false);
+        await this._mqttClient.publish(
+            topic,
+            JSON.stringify(instanceToPlain(dto)),
+            1,
+            false,
+        );
     }
 
-    private async _publishTransferAborted(chunkStream: ChunkStream, reason: string) {
+    private async _publishTransferAborted(
+        chunkStream: ChunkStream,
+        reason: string,
+    ) {
         this._logger.warn(
-            `Unsubscribing from stream ${chunkStream.streamId} and publishing abort message`
+            `Unsubscribing from stream ${chunkStream.streamId} and publishing abort message`,
         );
 
         chunkStream.abortedByReceiver = true;
@@ -325,8 +393,11 @@ export class MqttFileReceiver {
         const dto = new FileTransferAbortDto();
         dto.reason = reason;
         await this._validateAndPublishDto(
-            FileTransferTopics.getStreamTopic(chunkStream.streamId, StreamTopicType.abort),
-            dto
+            FileTransferTopics.getStreamTopic(
+                chunkStream.streamId,
+                StreamTopicType.abort,
+            ),
+            dto,
         );
     }
 
@@ -343,27 +414,37 @@ export class MqttFileReceiver {
         const freeSpace = bavail * bsize;
         if (freeSpace < dto.fileSize) {
             throw new FileTransferError(
-                `Not enough free space in work path (${this._workPath}). Required: ${dto.fileSize}, Available: ${freeSpace}`
+                `Not enough free space in work path (${this._workPath}). Required: ${dto.fileSize}, Available: ${freeSpace}`,
             );
         }
 
-        const tempFilePath = join(`${this._workPath}/${this._randomStringProvider(24)}`);
+        const tempFilePath = join(
+            `${this._workPath}/${this._randomStringProvider(24)}`,
+        );
 
-        this._logger.log(`Creating file for stream ${chunkStream.streamId} at ${tempFilePath}`);
+        this._logger.log(
+            `Creating file for stream ${chunkStream.streamId} at ${tempFilePath}`,
+        );
 
         chunkStream.tempFilePath = tempFilePath;
-        chunkStream.fileHandle = await open(tempFilePath, "w+");
+        chunkStream.fileHandle = await open(tempFilePath, 'w+');
 
-        this._logger.log(`Pre-creating file of size ${dto.fileSize} at ${tempFilePath}`);
+        this._logger.log(
+            `Pre-creating file of size ${dto.fileSize} at ${tempFilePath}`,
+        );
         await chunkStream.fileHandle.truncate(dto.fileSize);
         await chunkStream.fileHandle.sync();
 
         this._chunkStreams.set(chunkStream.streamId, chunkStream);
 
         for (const [topic, qos] of Object.entries(
-            FileTransferTopics.getReceiverStreamTopics(chunkStream.streamId)
+            FileTransferTopics.getReceiverStreamTopics(chunkStream.streamId),
         )) {
-            await this._mqttClient.subscribe(topic, qos, this._boundOnStreamMessage);
+            await this._mqttClient.subscribe(
+                topic,
+                qos,
+                this._boundOnStreamMessage,
+            );
         }
 
         return chunkStream;
@@ -375,7 +456,7 @@ export class MqttFileReceiver {
         this._logger.log(`Closing stream ${streamId}`);
 
         for (const topic of Object.keys(
-            FileTransferTopics.getReceiverStreamTopics(chunkStream.streamId)
+            FileTransferTopics.getReceiverStreamTopics(chunkStream.streamId),
         )) {
             await this._mqttClient.unsubscribe(topic);
         }
@@ -385,20 +466,22 @@ export class MqttFileReceiver {
 
         if (!success) {
             await unlink(chunkStream.tempFilePath);
-            this._logger.log(`Temp file for stream ${streamId} deleted and stream closed`);
+            this._logger.log(
+                `Temp file for stream ${streamId} deleted and stream closed`,
+            );
         } else {
             this._logger.log(`Transfer ${streamId} completed successfully.`);
         }
     }
 
     private async _calculateChecksum(chunkStream: ChunkStream) {
-        const hash = createHash("sha256");
+        const hash = createHash('sha256');
         for await (const buffer of chunkStream.fileHandle.createReadStream({
             autoClose: false,
             start: 0,
         })) {
             hash.update(buffer);
         }
-        return hash.digest("hex");
+        return hash.digest('hex');
     }
 }

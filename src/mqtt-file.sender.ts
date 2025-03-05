@@ -1,14 +1,14 @@
-import { EventEmitter, once } from "node:events";
-import { createReadStream } from "node:fs";
-import { open, stat } from "node:fs/promises";
-import { setTimeout } from "node:timers/promises";
-import { inspect } from "node:util";
-import { createHash, randomUUID } from "node:crypto";
-import { Logger } from "@nestjs/common";
-import { queue } from "async";
-import { MqttClient } from "mqtt";
-import * as assert from "assert";
-import { FileTransferTopics, StreamTopicType } from "./file-transfer.topics";
+import { EventEmitter, once } from 'node:events';
+import { createReadStream } from 'node:fs';
+import { open, stat } from 'node:fs/promises';
+import { setTimeout } from 'node:timers/promises';
+import { inspect } from 'node:util';
+import { createHash, randomUUID } from 'node:crypto';
+import { Logger } from '@nestjs/common';
+import { queue } from 'async';
+import { MqttClient } from 'mqtt';
+import * as assert from 'assert';
+import { FileTransferTopics, StreamTopicType } from './file-transfer.topics';
 import {
     AddFileDto,
     AddFileResponseDto,
@@ -17,16 +17,20 @@ import {
     FileTransferAckDto,
     FileTransferEofDto,
     FileTransferProgressDto,
-} from "./file-transfer.dto";
-import { ChunkBitmap } from "./chunk.bitmap";
-import { validateOrReject } from "class-validator";
-import { ClassConstructor, instanceToPlain, plainToInstance } from "class-transformer";
+} from './file-transfer.dto';
+import { ChunkBitmap } from './chunk.bitmap';
+import { validateOrReject } from 'class-validator';
+import {
+    ClassConstructor,
+    instanceToPlain,
+    plainToInstance,
+} from 'class-transformer';
 
 enum FileTransferEvent {
-    created = "created",
-    ack = "ack",
-    error = "error",
-    chunk = "chunk",
+    created = 'created',
+    ack = 'ack',
+    error = 'error',
+    chunk = 'chunk',
 }
 
 class FileTransfer extends EventEmitter<{
@@ -45,7 +49,7 @@ class FileTransfer extends EventEmitter<{
     constructor(
         public readonly fileName: string,
         public readonly fileSize: number,
-        public readonly startedAt: number
+        public readonly startedAt: number,
     ) {
         super({ captureRejections: true });
     }
@@ -54,21 +58,21 @@ class FileTransfer extends EventEmitter<{
 class FileTransferTimeout extends Error {
     constructor(message: string) {
         super(message);
-        this.name = "FileTransferTimeout";
+        this.name = 'FileTransferTimeout';
     }
 }
 
 class FileTransferServerError extends Error {
     constructor(message: string) {
         super(message);
-        this.name = "FileTransferServerError";
+        this.name = 'FileTransferServerError';
     }
 }
 
 class FileTransferAborted extends Error {
     constructor(message: string) {
         super(message);
-        this.name = "FileTransferAborted";
+        this.name = 'FileTransferAborted';
     }
 }
 
@@ -79,25 +83,28 @@ export class MqttFileSender {
     private readonly _streamAckTimeout = 60000;
     private readonly _skipEvery10thChunkForTests = false;
 
-    private readonly _promiseQueue = queue((task: () => Promise<void>, callback) => {
-        task().then(() => callback(), callback);
-    });
+    private readonly _promiseQueue = queue(
+        (task: () => Promise<void>, callback) => {
+            task().then(() => callback(), callback);
+        },
+    );
     private readonly _fileTransfers: FileTransfer[] = [];
 
-    private readonly _onMqttMessageWrapperBound = this._onMqttMessageWrapper.bind(this);
+    private readonly _onMqttMessageWrapperBound =
+        this._onMqttMessageWrapper.bind(this);
 
     constructor(private readonly _mqttClient: MqttClient) {}
 
     public async transferFile(fileName: string): Promise<void> {
         this._logger.log(`Sending file: ${fileName}`);
 
-        this._mqttClient.on("message", this._onMqttMessageWrapperBound);
+        this._mqttClient.on('message', this._onMqttMessageWrapperBound);
 
         try {
             const fileTransfer = new FileTransfer(
                 fileName,
                 await this._getFileSize(fileName),
-                new Date().getTime()
+                new Date().getTime(),
             );
             this._fileTransfers.push(fileTransfer);
 
@@ -109,7 +116,7 @@ export class MqttFileSender {
                         once(fileTransfer, FileTransferEvent.created),
                         this._createTimeout(
                             this._streamCreateTimeout,
-                            "Timeout waiting for stream creation."
+                            'Timeout waiting for stream creation.',
                         ),
                     ]);
                 } finally {
@@ -117,41 +124,51 @@ export class MqttFileSender {
                 }
 
                 const streamId = fileTransfer.streamId;
-                assert.ok(streamId, "StreamId not set after streamCreated event.");
+                assert.ok(
+                    streamId,
+                    'StreamId not set after streamCreated event.',
+                );
 
                 await this._subscribeToStream(streamId);
                 try {
-                    this._logger.log(`Stream created: ${streamId}, sending file chunks`);
+                    this._logger.log(
+                        `Stream created: ${streamId}, sending file chunks`,
+                    );
 
-                    const ackPromise = once(fileTransfer, FileTransferEvent.ack);
+                    const ackPromise = once(
+                        fileTransfer,
+                        FileTransferEvent.ack,
+                    );
                     await this._sendFileChunks(fileTransfer);
 
-                    this._logger.log(`Waiting for re-transfers and acknowledgement...`);
+                    this._logger.log(
+                        `Waiting for re-transfers and acknowledgement...`,
+                    );
                     while (
                         (await Promise.race([
-                            ackPromise.then(() => "ack" as const),
+                            ackPromise.then(() => 'ack' as const),
                             once(fileTransfer, FileTransferEvent.chunk).then(
-                                () => "chunk" as const
+                                () => 'chunk' as const,
                             ),
                             this._createTimeout(
                                 this._streamAckTimeout,
-                                "Timeout waiting for stream acknowledgement."
+                                'Timeout waiting for stream acknowledgement.',
                             ),
-                        ])) !== "ack"
+                        ])) !== 'ack'
                     ) {
                         // each re-transfer chunk resets the timeout
                     }
 
-                    assert.ok(fileTransfer.ack, "Ack not set after ack event.");
+                    assert.ok(fileTransfer.ack, 'Ack not set after ack event.');
 
                     this._logger.log(
-                        `File transfer completed: ${fileName} (streamId: ${streamId}). File url: ${fileTransfer.ack.fileUrl}`
+                        `File transfer completed: ${fileName} (streamId: ${streamId}). File url: ${fileTransfer.ack.fileUrl}`,
                     );
                 } catch (error: unknown) {
                     if (!(error instanceof FileTransferAborted)) {
                         await this._abortTransfer(
                             streamId,
-                            String((error as Error)?.message || error)
+                            String((error as Error)?.message || error),
                         );
                     }
                     throw error;
@@ -159,21 +176,27 @@ export class MqttFileSender {
                     await this._unsubscribeFromStream(streamId);
                 }
             } finally {
-                this._fileTransfers.splice(this._fileTransfers.indexOf(fileTransfer), 1);
+                this._fileTransfers.splice(
+                    this._fileTransfers.indexOf(fileTransfer),
+                    1,
+                );
             }
         } finally {
-            this._mqttClient.off("message", this._onMqttMessageWrapperBound);
+            this._mqttClient.off('message', this._onMqttMessageWrapperBound);
         }
     }
 
     private async _publishChecksum(fileTransfer: FileTransfer) {
-        assert.ok(this._mqttClient, "MQTT client not initialized.");
-        assert.ok(fileTransfer.streamId, "StreamId not set.");
-        assert.ok(fileTransfer.checksum, "Checksum not set.");
+        assert.ok(this._mqttClient, 'MQTT client not initialized.');
+        assert.ok(fileTransfer.streamId, 'StreamId not set.');
+        assert.ok(fileTransfer.checksum, 'Checksum not set.');
 
-        const topic = FileTransferTopics.getStreamTopic(fileTransfer.streamId, StreamTopicType.eof);
+        const topic = FileTransferTopics.getStreamTopic(
+            fileTransfer.streamId,
+            StreamTopicType.eof,
+        );
         this._logger.log(
-            `Transfer finished, publishing checksum ${fileTransfer.checksum} to topic: ${topic}`
+            `Transfer finished, publishing checksum ${fileTransfer.checksum} to topic: ${topic}`,
         );
 
         const dto = new FileTransferEofDto();
@@ -182,15 +205,19 @@ export class MqttFileSender {
         await this._publishDto(topic, dto);
     }
 
-    private async _publishChunk(fileTransfer: FileTransfer, offset: number, chunk: Buffer) {
-        assert.ok(this._mqttClient, "MQTT client not initialized.");
-        assert.ok(fileTransfer.streamId, "StreamId not set.");
+    private async _publishChunk(
+        fileTransfer: FileTransfer,
+        offset: number,
+        chunk: Buffer,
+    ) {
+        assert.ok(this._mqttClient, 'MQTT client not initialized.');
+        assert.ok(fileTransfer.streamId, 'StreamId not set.');
 
-        const chunkChecksum = createHash("sha256").update(chunk).digest("hex");
+        const chunkChecksum = createHash('sha256').update(chunk).digest('hex');
         const chunkTopic = FileTransferTopics.getChunkTopic(
             fileTransfer.streamId,
             offset,
-            chunkChecksum
+            chunkChecksum,
         );
 
         await this._mqttClient.publishAsync(chunkTopic, chunk, {
@@ -203,10 +230,10 @@ export class MqttFileSender {
     }
 
     private async _sendFileChunks(fileTransfer: FileTransfer) {
-        assert.ok(fileTransfer.streamId, "StreamId not set.");
-        assert.ok(fileTransfer.chunkSize, "ChunkSize not set.");
+        assert.ok(fileTransfer.streamId, 'StreamId not set.');
+        assert.ok(fileTransfer.chunkSize, 'ChunkSize not set.');
 
-        const hash = createHash("sha256");
+        const hash = createHash('sha256');
         const fileStream = createReadStream(fileTransfer.fileName, {
             highWaterMark: fileTransfer.chunkSize,
         });
@@ -215,10 +242,13 @@ export class MqttFileSender {
             if (fileTransfer.abortReason !== undefined) {
                 throw new FileTransferAborted(fileTransfer.abortReason);
             }
-            if (this._skipEvery10thChunkForTests && offset % (chunk.length * 10) === 0) {
+            if (
+                this._skipEvery10thChunkForTests &&
+                offset % (chunk.length * 10) === 0
+            ) {
                 this._logger.warn(
                     `Skipping chunk at offset ${offset} to test re-transfers. ` +
-                        `Chunk checksum: ${createHash("sha256").update(chunk).digest("hex")}`
+                        `Chunk checksum: ${createHash('sha256').update(chunk).digest('hex')}`,
                 );
             } else {
                 await this._publishChunk(fileTransfer, offset, chunk);
@@ -226,33 +256,42 @@ export class MqttFileSender {
             hash.update(chunk);
             offset += chunk.length;
         }
-        fileTransfer.checksum = hash.digest("hex");
+        fileTransfer.checksum = hash.digest('hex');
         await this._publishChecksum(fileTransfer);
     }
 
     private async _processRetransfer(fileTransfer: FileTransfer, raw: Buffer) {
         assert.ok(
             fileTransfer.chunkSize,
-            "ChunkSize not set at time of re-transfer. Re-transfer arrived before addFileResponse?"
+            'ChunkSize not set at time of re-transfer. Re-transfer arrived before addFileResponse?',
         );
         assert.ok(
             fileTransfer.streamId,
-            "ChunkSize not set at time of re-transfer. Re-transfer arrived before addFileResponse?"
+            'ChunkSize not set at time of re-transfer. Re-transfer arrived before addFileResponse?',
         );
-        const chunkBitmap = new ChunkBitmap(fileTransfer.fileSize, fileTransfer.chunkSize, raw);
+        const chunkBitmap = new ChunkBitmap(
+            fileTransfer.fileSize,
+            fileTransfer.chunkSize,
+            raw,
+        );
 
-        const fileHandle = await open(fileTransfer.fileName, "r+");
+        const fileHandle = await open(fileTransfer.fileName, 'r+');
         const buffer = Buffer.alloc(fileTransfer.chunkSize);
         try {
             for (const offset of chunkBitmap.getMissingChunks()) {
                 if (fileTransfer.abortReason !== undefined) {
                     throw new FileTransferAborted(fileTransfer.abortReason);
                 }
-                const readResult = await fileHandle.read(buffer, 0, fileTransfer.chunkSize, offset);
+                const readResult = await fileHandle.read(
+                    buffer,
+                    0,
+                    fileTransfer.chunkSize,
+                    offset,
+                );
                 await this._publishChunk(
                     fileTransfer,
                     offset,
-                    buffer.subarray(0, readResult.bytesRead)
+                    buffer.subarray(0, readResult.bytesRead),
                 );
             }
         } finally {
@@ -262,28 +301,37 @@ export class MqttFileSender {
     }
 
     private async _abortTransfer(streamId: string, reason: string) {
-        assert.ok(this._mqttClient, "MQTT client not initialized.");
+        assert.ok(this._mqttClient, 'MQTT client not initialized.');
 
-        this._logger.warn(`Aborting transfer, streamId: ${streamId}. Reason: ${reason}`);
+        this._logger.warn(
+            `Aborting transfer, streamId: ${streamId}. Reason: ${reason}`,
+        );
 
         const dto = new FileTransferAbortDto();
         dto.reason = reason;
 
         await this._publishDto(
             FileTransferTopics.getStreamTopic(streamId, StreamTopicType.abort),
-            dto
+            dto,
         );
     }
 
     private async _publishDto(topic: string, dto: object) {
-        assert.ok(this._mqttClient, "MQTT client not initialized.");
+        assert.ok(this._mqttClient, 'MQTT client not initialized.');
         await validateOrReject(dto);
-        await this._mqttClient.publishAsync(topic, JSON.stringify(instanceToPlain(dto)), {
-            qos: 1,
-        });
+        await this._mqttClient.publishAsync(
+            topic,
+            JSON.stringify(instanceToPlain(dto)),
+            {
+                qos: 1,
+            },
+        );
     }
 
-    private async _createTimeout(timeout: number, message: string): Promise<never> {
+    private async _createTimeout(
+        timeout: number,
+        message: string,
+    ): Promise<never> {
         await setTimeout(timeout, undefined, {
             ref: false,
         });
@@ -291,7 +339,7 @@ export class MqttFileSender {
     }
 
     private async _requestNewStream(fileTransfer: FileTransfer) {
-        assert.ok(this._mqttClient, "MQTT client not initialized.");
+        assert.ok(this._mqttClient, 'MQTT client not initialized.');
         const dto = new AddFileDto();
         dto.requestToken = fileTransfer.requestToken;
         dto.fileSize = fileTransfer.fileSize;
@@ -300,11 +348,15 @@ export class MqttFileSender {
 
     private async _onMqttMessage(topic: string, raw: Buffer) {
         if (topic === FileTransferTopics.getAddFileResponseTopic()) {
-            const dto = await this._parseAndValidateDto(raw, AddFileResponseDto);
+            const dto = await this._parseAndValidateDto(
+                raw,
+                AddFileResponseDto,
+            );
             this._logger.verbose(`Received ${topic}: ${inspect(dto)}`);
 
             const fileTransfer = this._fileTransfers.find(
-                (fileTransfer) => fileTransfer.requestToken === dto.requestToken
+                (fileTransfer) =>
+                    fileTransfer.requestToken === dto.requestToken,
             );
 
             if (fileTransfer) {
@@ -315,7 +367,9 @@ export class MqttFileSender {
                 } else {
                     fileTransfer.emit(
                         FileTransferEvent.error,
-                        new FileTransferServerError(dto.error ?? "Unknown Error")
+                        new FileTransferServerError(
+                            dto.error ?? 'Unknown Error',
+                        ),
                     );
                 }
             }
@@ -330,28 +384,41 @@ export class MqttFileSender {
                     topic === FileTransferTopics.getStreamTopic(streamId, type);
 
                 if (isMatch(StreamTopicType.ack)) {
-                    const dto = await this._parseAndValidateDto(raw, FileTransferAckDto);
+                    const dto = await this._parseAndValidateDto(
+                        raw,
+                        FileTransferAckDto,
+                    );
                     this._logger.log(`Received ${topic}: ${inspect(dto)}`);
                     fileTransfer.ack = dto;
                     fileTransfer.emit(FileTransferEvent.ack, dto);
                 } else if (isMatch(StreamTopicType.abort)) {
-                    const dto = await this._parseAndValidateDto(raw, FileTransferAbortDto);
+                    const dto = await this._parseAndValidateDto(
+                        raw,
+                        FileTransferAbortDto,
+                    );
                     this._logger.warn(`Received ${topic}: ${inspect(dto)}`);
                     fileTransfer.abortReason = dto.reason;
-                    fileTransfer.emit(FileTransferEvent.error, new FileTransferAborted(dto.reason));
+                    fileTransfer.emit(
+                        FileTransferEvent.error,
+                        new FileTransferAborted(dto.reason),
+                    );
                 } else if (isMatch(StreamTopicType.retransfer)) {
                     this._logger.warn(`Received ${topic}`);
                     await this._processRetransfer(fileTransfer, raw);
                 } else if (isMatch(StreamTopicType.progress)) {
-                    const dto = await this._parseAndValidateDto(raw, FileTransferProgressDto);
-                    const elapsed = new Date().getTime() - fileTransfer.startedAt;
+                    const dto = await this._parseAndValidateDto(
+                        raw,
+                        FileTransferProgressDto,
+                    );
+                    const elapsed =
+                        new Date().getTime() - fileTransfer.startedAt;
                     this._logger.verbose(`Received ${topic}: ${inspect(dto)}.`);
 
                     this._logger.debug(
-                        `Progress: ${((dto.bytesReceived / fileTransfer.fileSize) * 100).toFixed(2)}%`
+                        `Progress: ${((dto.bytesReceived / fileTransfer.fileSize) * 100).toFixed(2)}%`,
                     );
                     this._logger.debug(
-                        `Speed: ${(((dto.bytesReceived / elapsed) * 1000) / (1024 * 1024)).toFixed(2)} MB/s`
+                        `Speed: ${(((dto.bytesReceived / elapsed) * 1000) / (1024 * 1024)).toFixed(2)} MB/s`,
                     );
                 }
             }
@@ -360,7 +427,7 @@ export class MqttFileSender {
 
     private async _parseAndValidateDto<T extends object>(
         raw: Buffer,
-        cls: ClassConstructor<T>
+        cls: ClassConstructor<T>,
     ): Promise<T> {
         const message = JSON.parse(raw.toString());
         const dto = plainToInstance(cls, message);
@@ -375,38 +442,43 @@ export class MqttFileSender {
 
     private async _subscribeToAddFileResponse() {
         const mqttClient = this._mqttClient;
-        assert.ok(mqttClient, "MQTT client not initialized.");
+        assert.ok(mqttClient, 'MQTT client not initialized.');
 
-        await mqttClient.subscribeAsync(FileTransferTopics.getAddFileResponseTopic(), {
-            qos: 1,
-        });
+        await mqttClient.subscribeAsync(
+            FileTransferTopics.getAddFileResponseTopic(),
+            {
+                qos: 1,
+            },
+        );
     }
 
     private async _unsubscribeFromAddFileResponse() {
         const mqttClient = this._mqttClient;
-        assert.ok(mqttClient, "MQTT client not initialized.");
+        assert.ok(mqttClient, 'MQTT client not initialized.');
 
-        await mqttClient.unsubscribeAsync(FileTransferTopics.getAddFileResponseTopic());
+        await mqttClient.unsubscribeAsync(
+            FileTransferTopics.getAddFileResponseTopic(),
+        );
     }
 
     private async _subscribeToStream(streamId: string) {
         const mqttClient = this._mqttClient;
-        assert.ok(mqttClient, "MQTT client not initialized.");
+        assert.ok(mqttClient, 'MQTT client not initialized.');
 
         await mqttClient.subscribeAsync(
             Object.keys(FileTransferTopics.getSenderStreamTopics(streamId)),
             {
                 qos: 1,
-            }
+            },
         );
     }
 
     private async _unsubscribeFromStream(streamId: string) {
         const mqttClient = this._mqttClient;
-        assert.ok(mqttClient, "MQTT client not initialized.");
+        assert.ok(mqttClient, 'MQTT client not initialized.');
 
         await mqttClient.unsubscribeAsync(
-            Object.keys(FileTransferTopics.getSenderStreamTopics(streamId))
+            Object.keys(FileTransferTopics.getSenderStreamTopics(streamId)),
         );
     }
 

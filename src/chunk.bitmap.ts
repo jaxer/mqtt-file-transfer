@@ -6,10 +6,11 @@ export class ChunkBitmap {
     constructor(
         fileSize: number,
         private readonly _chunkSize: number,
-        bitmap?: Uint8Array
+        bitmap?: Uint8Array,
     ) {
         this._totalChunks = Math.ceil(fileSize / this._chunkSize);
-        this._bitmap = bitmap ?? new Uint8Array(Math.ceil(this._totalChunks / 8));
+        this._bitmap =
+            bitmap ?? new Uint8Array(Math.ceil(this._totalChunks / 8));
     }
 
     public trackChunk(offset: number): boolean {
@@ -59,7 +60,7 @@ export class ChunkBitmap {
 
     public getDebugString(): string {
         return Array.from(this._bitmap)
-            .map((byte) => byte.toString(2).padStart(8, "0"))
-            .join(" ");
+            .map((byte) => byte.toString(2).padStart(8, '0'))
+            .join(' ');
     }
 }

@@ -1,4 +1,11 @@
-import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from "class-validator";
+import {
+    IsEnum,
+    IsNotEmpty,
+    IsNumber,
+    IsOptional,
+    IsString,
+    Min,
+} from 'class-validator';
 
 export class FileTransferAbortDto {
     @IsString()
@@ -30,8 +37,8 @@ export class AddFileDto {
 }
 
 export enum AddFileResponseStatus {
-    OK = "OK",
-    ERROR = "ERROR",
+    OK = 'OK',
+    ERROR = 'ERROR',
 }
 
 export class AddFileResponseDto {

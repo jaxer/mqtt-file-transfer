@@ -2,7 +2,7 @@ export abstract class MqttClientFacade {
     abstract subscribe(
         topic: string,
         qos: 0 | 1 | 2,
-        messageProcessor: (topic: string, message: ArrayBuffer) => void
+        messageProcessor: (topic: string, message: ArrayBuffer) => void,
     ): Promise<void>;
 
     abstract unsubscribe(topic: string): Promise<void>;
@@ -11,6 +11,6 @@ export abstract class MqttClientFacade {
         topic: string,
         message: ArrayBuffer | string,
         qos: 0 | 1 | 2,
-        retain: boolean
+        retain: boolean,
     ): Promise<void>;
 }
