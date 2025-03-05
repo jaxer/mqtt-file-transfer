@@ -7,8 +7,8 @@ jest.setTimeout(30000); // 30 seconds
 
 describe('e2e', () => {
     it('should use real MQTT Broker', async () => {
-        const receiverClient = mqtt.connect('mqtt://localhost:1883');
-        const senderClient = mqtt.connect('mqtt://localhost:1883');
+        const receiverClient = await mqtt.connectAsync('mqtt://localhost:1883');
+        const senderClient = await mqtt.connectAsync('mqtt://localhost:1883');
 
         const receiver = new MqttFileReceiver(
             './received-files',
@@ -22,7 +22,7 @@ describe('e2e', () => {
 
         expect(fileUrl).toMatch(/^file:\/\/.*$/);
 
-        senderClient.end();
-        receiverClient.end();
+        await senderClient.endAsync();
+        await receiverClient.endAsync();
     });
 });
