@@ -95,7 +95,7 @@ export class MqttFileSender {
 
     constructor(private readonly _mqttClient: MqttClient) {}
 
-    public async transferFile(fileName: string): Promise<void> {
+    public async transferFile(fileName: string): Promise<string> {
         this._logger.log(`Sending file: ${fileName}`);
 
         this._mqttClient.on('message', this._onMqttMessageWrapperBound);
@@ -164,6 +164,8 @@ export class MqttFileSender {
                     this._logger.log(
                         `File transfer completed: ${fileName} (streamId: ${streamId}). File url: ${fileTransfer.ack.fileUrl}`,
                     );
+
+                    return fileTransfer.ack.fileUrl;
                 } catch (error: unknown) {
                     if (!(error instanceof FileTransferAborted)) {
                         await this._abortTransfer(
