@@ -17,7 +17,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y docker-compose
 
       - name: Set up Mosquitto MQTT broker
-        run: docker-compose -f docker/docker-compose.yaml up -d
+        run: docker-compose up -d
+        working-directory: docker
 
       - name: Checkout code
         uses: actions/checkout@v3
