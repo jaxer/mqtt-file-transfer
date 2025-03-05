@@ -1,0 +1,12 @@
+{
+    "name": "Node.js & TypeScript",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "devcontainer",
+    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+    "postCreateCommand": "npm i",
+    "customizations": {
+        "jetbrains": {
+            "backend": "WebStorm"
+        }
+    }
+}

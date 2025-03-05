@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  devcontainer:
+    image: mcr.microsoft.com/devcontainers/base:ubuntu
+    volumes:
+      - ../..:/workspaces:cached
+    network_mode: service:mqtt
+    command: sleep infinity
+
+  mqtt:
+    image: eclipse-mosquitto:latest
+    restart: unless-stopped
