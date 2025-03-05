@@ -23,6 +23,11 @@ import {
     FileTransferEofDto,
     FileTransferProgressDto,
 } from './file-transfer.dto';
+import {
+    FileTransferAborted,
+    FileTransferServerError,
+    FileTransferTimeout,
+} from './file-transfer.errors';
 import { FileTransferTopics, StreamTopicType } from './file-transfer.topics';
 import { EmptyLogger } from './logger/empty.logger';
 import { LoggerInterface } from './logger/logger.interface';
@@ -53,27 +58,6 @@ class FileTransfer extends EventEmitter<{
         public readonly startedAt: number,
     ) {
         super({ captureRejections: true });
-    }
-}
-
-class FileTransferTimeout extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'FileTransferTimeout';
-    }
-}
-
-class FileTransferServerError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'FileTransferServerError';
-    }
-}
-
-class FileTransferAborted extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'FileTransferAborted';
     }
 }
 

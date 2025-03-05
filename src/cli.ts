@@ -5,14 +5,7 @@ import * as mqtt from 'mqtt';
 import { MqttClient } from 'mqtt';
 import { IClientOptions } from 'mqtt/src/lib/client';
 import { ErrorWithReasonCode } from 'mqtt/src/lib/shared';
-import {
-    Command,
-    CommandFactory,
-    CommandRunner,
-    InquirerService,
-    Option,
-} from 'nest-commander';
-import { randomBytes } from 'node:crypto';
+import { Command, CommandFactory, CommandRunner, Option } from 'nest-commander';
 import { inspect } from 'util';
 import { MqttFileReceiver } from './mqtt-file.receiver';
 import { MqttFileSender } from './mqtt-file.sender';
@@ -174,12 +167,8 @@ class SendCommand extends MqttCommand {
     arguments: '<destinationPath>',
 })
 class ReceiveCommand extends MqttCommand implements OnModuleDestroy {
-    private _mqttFileReceiver: MqttFileReceiver;
-    private _mqttClient: MqttClient;
-
-    constructor(private readonly _inquirerService: InquirerService) {
-        super();
-    }
+    private _mqttFileReceiver?: MqttFileReceiver;
+    private _mqttClient?: MqttClient;
 
     public async run(
         args: [destinationPath: string],
@@ -192,8 +181,6 @@ class ReceiveCommand extends MqttCommand implements OnModuleDestroy {
         this._mqttFileReceiver = new MqttFileReceiver(
             destinationPath,
             new MqttjsFacade(this._mqttClient),
-            () => Date.now(),
-            (length) => randomBytes(length).toString('hex').slice(0, length),
         );
 
         await this._mqttFileReceiver.addSubscriptions();

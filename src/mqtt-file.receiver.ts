@@ -11,7 +11,6 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { inspect } from 'node:util';
 import { ChunkBitmap } from './chunk.bitmap';
-import { FileTransferError } from './errors/file-transfer.error';
 import {
     AddFileDto,
     AddFileResponseDto,
@@ -21,6 +20,7 @@ import {
     FileTransferEofDto,
     FileTransferProgressDto,
 } from './file-transfer.dto';
+import { FileTransferError } from './file-transfer.errors';
 import { FileTransferTopics, StreamTopicType } from './file-transfer.topics';
 import { EmptyLogger } from './logger/empty.logger';
 import { LoggerInterface } from './logger/logger.interface';
