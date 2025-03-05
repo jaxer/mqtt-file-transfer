@@ -10,30 +10,30 @@ import {
 export class FileTransferAbortDto {
     @IsString()
     @IsNotEmpty()
-    public reason: string;
+    public reason!: string;
 }
 
 export class FileTransferEofDto {
     @IsString()
     @IsNotEmpty()
-    public checksum: string;
+    public checksum!: string;
 }
 
 export class FileTransferAckDto {
     @IsString()
     @IsNotEmpty()
-    public fileUrl: string;
+    public fileUrl!: string;
 }
 
 export class AddFileDto {
     @IsNumber()
     @IsNotEmpty()
     @Min(1)
-    public fileSize: number;
+    public fileSize!: number;
 
     @IsString()
     @IsNotEmpty()
-    public requestToken: string;
+    public requestToken!: string;
 }
 
 export enum AddFileResponseStatus {
@@ -44,7 +44,7 @@ export enum AddFileResponseStatus {
 export class AddFileResponseDto {
     @IsEnum(AddFileResponseStatus)
     @IsNotEmpty()
-    public status: AddFileResponseStatus;
+    public status!: AddFileResponseStatus;
 
     @IsString()
     @IsOptional()
@@ -66,5 +66,5 @@ export class AddFileResponseDto {
 export class FileTransferProgressDto {
     @IsNumber()
     @IsNotEmpty()
-    public bytesReceived: number;
+    public bytesReceived!: number;
 }

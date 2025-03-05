@@ -1,14 +1,19 @@
+import * as assert from 'assert';
+import { queue } from 'async';
+import {
+    ClassConstructor,
+    instanceToPlain,
+    plainToInstance,
+} from 'class-transformer';
+import { validateOrReject } from 'class-validator';
+import { MqttClient } from 'mqtt';
+import { createHash, randomUUID } from 'node:crypto';
 import { EventEmitter, once } from 'node:events';
 import { createReadStream } from 'node:fs';
 import { open, stat } from 'node:fs/promises';
 import { setTimeout } from 'node:timers/promises';
 import { inspect } from 'node:util';
-import { createHash, randomUUID } from 'node:crypto';
-import { Logger } from '@nestjs/common';
-import { queue } from 'async';
-import { MqttClient } from 'mqtt';
-import * as assert from 'assert';
-import { FileTransferTopics, StreamTopicType } from './file-transfer.topics';
+import { ChunkBitmap } from './chunk.bitmap';
 import {
     AddFileDto,
     AddFileResponseDto,
@@ -18,13 +23,9 @@ import {
     FileTransferEofDto,
     FileTransferProgressDto,
 } from './file-transfer.dto';
-import { ChunkBitmap } from './chunk.bitmap';
-import { validateOrReject } from 'class-validator';
-import {
-    ClassConstructor,
-    instanceToPlain,
-    plainToInstance,
-} from 'class-transformer';
+import { FileTransferTopics, StreamTopicType } from './file-transfer.topics';
+import { EmptyLogger } from './logger/empty.logger';
+import { LoggerInterface } from './logger/logger.interface';
 
 enum FileTransferEvent {
     created = 'created',
@@ -77,8 +78,6 @@ class FileTransferAborted extends Error {
 }
 
 export class MqttFileSender {
-    private readonly _logger = new Logger(MqttFileSender.name);
-
     private readonly _streamCreateTimeout = 5000;
     private readonly _streamAckTimeout = 60000;
     private readonly _skipEvery10thChunkForTests = false;
@@ -93,10 +92,13 @@ export class MqttFileSender {
     private readonly _onMqttMessageWrapperBound =
         this._onMqttMessageWrapper.bind(this);
 
-    constructor(private readonly _mqttClient: MqttClient) {}
+    constructor(
+        private readonly _mqttClient: MqttClient,
+        private readonly _logger: LoggerInterface = new EmptyLogger(),
+    ) {}
 
     public async transferFile(fileName: string): Promise<string> {
-        this._logger.log(`Sending file: ${fileName}`);
+        this._logger.info(`Sending file: ${fileName}`);
 
         this._mqttClient.on('message', this._onMqttMessageWrapperBound);
 
@@ -131,7 +133,7 @@ export class MqttFileSender {
 
                 await this._subscribeToStream(streamId);
                 try {
-                    this._logger.log(
+                    this._logger.info(
                         `Stream created: ${streamId}, sending file chunks`,
                     );
 
@@ -141,7 +143,7 @@ export class MqttFileSender {
                     );
                     await this._sendFileChunks(fileTransfer);
 
-                    this._logger.log(
+                    this._logger.info(
                         `Waiting for re-transfers and acknowledgement...`,
                     );
                     while (
@@ -161,7 +163,7 @@ export class MqttFileSender {
 
                     assert.ok(fileTransfer.ack, 'Ack not set after ack event.');
 
-                    this._logger.log(
+                    this._logger.info(
                         `File transfer completed: ${fileName} (streamId: ${streamId}). File url: ${fileTransfer.ack.fileUrl}`,
                     );
 
@@ -197,7 +199,7 @@ export class MqttFileSender {
             fileTransfer.streamId,
             StreamTopicType.eof,
         );
-        this._logger.log(
+        this._logger.info(
             `Transfer finished, publishing checksum ${fileTransfer.checksum} to topic: ${topic}`,
         );
 
@@ -228,7 +230,7 @@ export class MqttFileSender {
 
         fileTransfer.emit(FileTransferEvent.chunk);
 
-        this._logger.verbose(`Published ${chunkTopic} (${chunk.length}b)`);
+        this._logger.debug(`Published ${chunkTopic} (${chunk.length}b)`);
     }
 
     private async _sendFileChunks(fileTransfer: FileTransfer) {
@@ -354,7 +356,7 @@ export class MqttFileSender {
                 raw,
                 AddFileResponseDto,
             );
-            this._logger.verbose(`Received ${topic}: ${inspect(dto)}`);
+            this._logger.debug(`Received ${topic}: ${inspect(dto)}`);
 
             const fileTransfer = this._fileTransfers.find(
                 (fileTransfer) =>
@@ -390,7 +392,7 @@ export class MqttFileSender {
                         raw,
                         FileTransferAckDto,
                     );
-                    this._logger.log(`Received ${topic}: ${inspect(dto)}`);
+                    this._logger.info(`Received ${topic}: ${inspect(dto)}`);
                     fileTransfer.ack = dto;
                     fileTransfer.emit(FileTransferEvent.ack, dto);
                 } else if (isMatch(StreamTopicType.abort)) {
@@ -414,7 +416,7 @@ export class MqttFileSender {
                     );
                     const elapsed =
                         new Date().getTime() - fileTransfer.startedAt;
-                    this._logger.verbose(`Received ${topic}: ${inspect(dto)}.`);
+                    this._logger.debug(`Received ${topic}: ${inspect(dto)}.`);
 
                     this._logger.debug(
                         `Progress: ${((dto.bytesReceived / fileTransfer.fileSize) * 100).toFixed(2)}%`,

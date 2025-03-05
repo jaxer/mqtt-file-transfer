@@ -1,8 +1,7 @@
-import { MqttFileReceiver } from '../src/mqtt-file.receiver';
 import * as mqtt from 'mqtt';
-import { randomBytes } from 'node:crypto';
-import { MqttjsFacade } from '../src/mqttjs.facade';
+import { MqttFileReceiver } from '../src/mqtt-file.receiver';
 import { MqttFileSender } from '../src/mqtt-file.sender';
+import { MqttjsFacade } from '../src/mqttjs.facade';
 
 describe('e2e', () => {
     it('should use real MQTT Broker', async () => {
@@ -12,8 +11,6 @@ describe('e2e', () => {
         const receiver = new MqttFileReceiver(
             './received-files',
             new MqttjsFacade(receiverClient),
-            () => Date.now(),
-            (length) => randomBytes(length).toString('hex').slice(0, length),
         );
 
         await receiver.addSubscriptions();

@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import * as async from 'async';
 import {
     ClassConstructor,
@@ -6,12 +5,13 @@ import {
     plainToInstance,
 } from 'class-transformer';
 import { validateOrReject } from 'class-validator';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { FileHandle, open, statfs, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { inspect } from 'node:util';
 import { ChunkBitmap } from './chunk.bitmap';
+import { FileTransferError } from './errors/file-transfer.error';
 import {
     AddFileDto,
     AddFileResponseDto,
@@ -22,6 +22,8 @@ import {
     FileTransferProgressDto,
 } from './file-transfer.dto';
 import { FileTransferTopics, StreamTopicType } from './file-transfer.topics';
+import { EmptyLogger } from './logger/empty.logger';
+import { LoggerInterface } from './logger/logger.interface';
 import { MqttClientFacade } from './mqtt-client.facade';
 
 const maxAllowedFileSizeInMb = 10 * 1024; // 10 GB
@@ -29,21 +31,22 @@ const chunkSizeInBytes = 64 * 1024; // 64 KB
 const publishProgressEverySeconds = 1;
 
 class ChunkStream {
-    public streamId: string;
-    public createdAt: number;
     public lastProgressAt?: number;
-    public tempFilePath: string;
-    public bitmap: ChunkBitmap;
-    public fileHandle: FileHandle;
     public abortedByReceiver?: boolean;
     public receivedBytes = 0;
 
-    constructor(public readonly addFileDto: AddFileDto) {
-        this.bitmap = new ChunkBitmap(
-            this.addFileDto.fileSize,
-            chunkSizeInBytes,
-        );
-    }
+    public readonly bitmap = new ChunkBitmap(
+        this.addFileDto.fileSize,
+        chunkSizeInBytes,
+    );
+
+    constructor(
+        public readonly addFileDto: AddFileDto,
+        public readonly createdAt: number,
+        public readonly streamId: string,
+        public readonly tempFilePath: string,
+        public readonly fileHandle: FileHandle,
+    ) {}
 
     public isTimeToPublishProgress(now: number): boolean {
         return (
@@ -53,16 +56,7 @@ class ChunkStream {
     }
 }
 
-class FileTransferError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'FileTransferError';
-    }
-}
-
 export class MqttFileReceiver {
-    private readonly _logger = new Logger(MqttFileReceiver.name);
-
     private _chunkStreams = new Map<string, ChunkStream>();
     private _boundOnStreamMessage = this._onStreamMessage.bind(this);
 
@@ -75,8 +69,11 @@ export class MqttFileReceiver {
     constructor(
         private readonly _workPath: string,
         private readonly _mqttClient: MqttClientFacade,
-        private readonly _currentTimestampProvider: () => number,
-        private readonly _randomStringProvider: (length: number) => string,
+        private readonly _logger: LoggerInterface = new EmptyLogger(),
+        private readonly _currentTimestampProvider: () => number = Date.now,
+        private readonly _randomStringProvider: (length: number) => string = (
+            length,
+        ) => randomBytes(length).toString('hex').slice(0, length),
     ) {}
 
     public async destroy(): Promise<void> {
@@ -116,7 +113,7 @@ export class MqttFileReceiver {
                     );
                 } catch (error) {
                     this._logger.error(
-                        `Failed to abort file transfer ${streamId}: ${error.stack || error}`,
+                        `Failed to abort file transfer ${streamId}: ${(error as Error)?.stack || error}`,
                     );
                 }
             }
@@ -148,23 +145,26 @@ export class MqttFileReceiver {
                 );
             } catch (error) {
                 this._logger.error(
-                    `Failed to abort file transfer ${streamId} on module destroy: ${error.stack || error}`,
+                    `Failed to abort file transfer ${streamId} on module destroy: ${(error as Error)?.stack || error}`,
                 );
             }
         }
     }
 
     private _wrapMessageProcessor(
-        messageProcessor: (topic: string, message: unknown) => Promise<void>,
+        messageProcessor: (
+            topic: string,
+            message: ArrayBuffer,
+        ) => Promise<void>,
     ) {
         const boundMessageProcessor = messageProcessor.bind(this);
-        return (topic: string, message: unknown) => {
+        return (topic: string, message: ArrayBuffer) => {
             void this._queue.push(async () => {
                 try {
                     return await boundMessageProcessor(topic, message);
                 } catch (error) {
                     this._logger.error(
-                        `Error processing message on ${topic}: ${error.stack || error}`,
+                        `Error processing message on ${topic}: ${(error as Error)?.stack || error}`,
                     );
                 }
             });
@@ -203,7 +203,7 @@ export class MqttFileReceiver {
                     message,
                     FileTransferAbortDto,
                 );
-                this._logger.verbose(`Received ${topic}: ${inspect(dto)}`);
+                this._logger.debug(`Received ${topic}: ${inspect(dto)}`);
                 await this._processAbortBySender(chunkStream, dto);
             }
         } else if (type === StreamTopicType.eof) {
@@ -211,7 +211,7 @@ export class MqttFileReceiver {
                 message,
                 FileTransferEofDto,
             );
-            this._logger.verbose(`Received ${topic}: ${inspect(dto)}`);
+            this._logger.debug(`Received ${topic}: ${inspect(dto)}`);
             await this._processEof(chunkStream, dto);
         } else if (type === StreamTopicType.chunk) {
             const offset = parseInt(offsetAsString);
@@ -224,7 +224,7 @@ export class MqttFileReceiver {
             const calculatedChecksum = createHash('sha256')
                 .update(Buffer.from(message))
                 .digest('hex');
-            this._logger.verbose(
+            this._logger.debug(
                 `Received ${topic}. Calculated checksum: ${calculatedChecksum}`,
             );
             if (calculatedChecksum !== checksum) {
@@ -355,11 +355,13 @@ export class MqttFileReceiver {
             );
         } catch (error) {
             this._logger.error(
-                `Error processing add file: ${error.stack || error}`,
+                `Error processing add file: ${(error as Error)?.stack || error}`,
             );
 
             response.status = AddFileResponseStatus.ERROR;
-            response.error = error.message || error;
+            response.error = String(
+                (error as Error)?.message || error || 'Unknown error',
+            );
 
             await this._validateAndPublishDto(
                 FileTransferTopics.getAddFileResponseTopic(),
@@ -371,7 +373,7 @@ export class MqttFileReceiver {
     private async _validateAndPublishDto(topic: string, dto: object) {
         await validateOrReject(dto);
 
-        this._logger.verbose(`Publishing ${topic}: ${inspect(dto)}`);
+        this._logger.debug(`Publishing ${topic}: ${inspect(dto)}`);
         await this._mqttClient.publish(
             topic,
             JSON.stringify(instanceToPlain(dto)),
@@ -402,10 +404,6 @@ export class MqttFileReceiver {
     }
 
     private async _createChunkStream(dto: AddFileDto) {
-        const chunkStream = new ChunkStream(dto);
-        chunkStream.createdAt = this._currentTimestampProvider();
-        chunkStream.streamId = this._randomStringProvider(16);
-
         if (dto.fileSize > maxAllowedFileSizeInMb * 1024 * 1024) {
             throw new FileTransferError(`File too large (${dto.fileSize})`);
         }
@@ -422,12 +420,19 @@ export class MqttFileReceiver {
             `${this._workPath}/${this._randomStringProvider(24)}`,
         );
 
+        const fileHandle = await open(tempFilePath, 'w+');
+
+        const chunkStream = new ChunkStream(
+            dto,
+            this._currentTimestampProvider(),
+            this._randomStringProvider(16),
+            tempFilePath,
+            fileHandle,
+        );
+
         this._logger.log(
             `Creating file for stream ${chunkStream.streamId} at ${tempFilePath}`,
         );
-
-        chunkStream.tempFilePath = tempFilePath;
-        chunkStream.fileHandle = await open(tempFilePath, 'w+');
 
         this._logger.log(
             `Pre-creating file of size ${dto.fileSize} at ${tempFilePath}`,
