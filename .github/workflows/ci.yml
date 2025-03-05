@@ -13,12 +13,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install Docker Compose
-        run: sudo apt-get update && sudo apt-get install -y docker-compose
-
-      - name: Set up Mosquitto MQTT broker
-        run: docker-compose up -d
-        working-directory: docker
+      - name: Start Mosquitto
+        uses: namoshek/mosquitto-github-action@v1
 
       - name: Checkout code
         uses: actions/checkout@v3
