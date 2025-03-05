@@ -9,7 +9,8 @@
         "receive": "ts-node src/cli.ts receive -p 1883 --protocol mqtt received-files/",
         "format": "prettier --write \"src/**/*.ts\"",
         "lint": "eslint \"{src}/**/*.ts\" --fix",
-        "test": "jest"
+        "test": "jest",
+        "test:e2e": "jest --config ./test/jest-e2e.json"
     },
     "dependencies": {
         "class-transformer": "^0.5.1",
