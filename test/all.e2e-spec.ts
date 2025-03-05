@@ -5,24 +5,46 @@ import { MqttjsFacade } from '../src/mqttjs.facade';
 
 jest.setTimeout(30000); // 30 seconds
 
-describe('e2e', () => {
-    it('should use real MQTT Broker', async () => {
-        const receiverClient = await mqtt.connectAsync('mqtt://localhost:1883');
-        const senderClient = await mqtt.connectAsync('mqtt://localhost:1883');
+describe('with real MQTT Broker', () => {
+    let receiverClient: mqtt.MqttClient;
+    let senderClient: mqtt.MqttClient;
 
-        const receiver = new MqttFileReceiver(
-            './received-files',
-            new MqttjsFacade(receiverClient),
-        );
+    beforeEach(async () => {
+        receiverClient = await mqtt.connectAsync('mqtt://localhost:1883');
+        senderClient = await mqtt.connectAsync('mqtt://localhost:1883');
+    });
 
-        await receiver.addSubscriptions();
+    describe('with MqttFileReceiver subscribed', () => {
+        let receiver: MqttFileReceiver;
 
-        const sender = new MqttFileSender(senderClient);
-        const fileUrl = await sender.transferFile('test/random_1KB.bin');
+        beforeEach(async () => {
+            receiver = new MqttFileReceiver(
+                './received-files',
+                new MqttjsFacade(receiverClient),
+            );
 
-        expect(fileUrl).toMatch(/^file:\/\/.*$/);
+            await receiver.addSubscriptions();
+        });
 
-        await senderClient.endAsync();
-        await receiverClient.endAsync();
+        describe('MqttFileSender', () => {
+            let sender: MqttFileSender;
+
+            beforeEach(async () => {
+                sender = new MqttFileSender(senderClient);
+            });
+
+            it('transferFile sends file over and return fileUrl', async () => {
+                const fileUrl = await sender.transferFile(
+                    'test/random_1KB.bin',
+                );
+
+                expect(fileUrl).toMatch(/^file:\/\/.*$/);
+            });
+        });
+    });
+
+    afterEach(async () => {
+        receiverClient.end();
+        senderClient.end();
     });
 });
