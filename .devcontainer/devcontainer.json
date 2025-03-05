@@ -1,6 +1,6 @@
 {
     "name": "Node.js & TypeScript",
-    "dockerComposeFile": "docker-compose.yml",
+    "dockerComposeFile": "docker-compose.yaml",
     "service": "devcontainer",
     "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
     "postCreateCommand": "npm i",
